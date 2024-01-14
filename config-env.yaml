@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: configmap-env
+data:
+  DATABASE_HOST: db.example.com
+  database_user: myuser
+  database_password: mypassword

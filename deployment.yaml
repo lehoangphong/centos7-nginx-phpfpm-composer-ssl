@@ -1,0 +1,88 @@
+#deployment.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: phpfpm-nginx
+  labels:
+    app: phpfpm-nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: phpfpm-nginx
+  template:
+    metadata:
+      labels:
+        app: phpfpm-nginx
+    spec:
+      volumes:
+        # Create the shared files volume to be used in both pods
+        - name: shared-files
+          emptyDir: {}
+
+        # Add the ConfigMap we declared above as a volume for the pod
+        - name: nginx-config-volume
+          configMap:
+            name: nginx-config
+        # add configmap env solution 1
+        - name: configmap-env-sol1
+          configMap:
+            name: configmap-env
+        # add configmap env solution 2
+        - name: configmap-env-sol2
+          configMap:
+            name: configmap-env-ini
+        # Add tls key
+        - name: tls
+          secret:
+            secretName: localhost-tls-secret
+      containers:
+        # Our PHP-FPM application
+        - image: lehoanggroup1487/my-php-app:1.0.26
+          name: app
+          env:
+            - name: DATABASE_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: configmap-env
+                  key: DATABASE_HOST
+          volumeMounts:
+            - name: shared-files
+              mountPath: /var/www/html
+            - name: configmap-env-sol1
+              mountPath: /etc/config
+            - name: configmap-env-sol2
+              mountPath: /etc/config/configmap
+          lifecycle:
+            postStart:
+              exec:
+                command: ["/bin/sh", "-c", "cp -r /app/. /var/www/html"]
+
+        # Our nginx container, which uses the configuration declared above,
+        # along with the files shared with the PHP-FPM app.
+        - image: nginx:1.7.9
+          name: nginx
+          volumeMounts:
+            - name: shared-files
+              mountPath: /var/www/html
+            - name: nginx-config-volume
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+            - name: tls
+              mountPath: /etc/nginx/tls
+            - name: configmap-env-sol1
+              mountPath: /etc/config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+spec:
+  selector:
+    app: phpfpm-nginx
+  ports:
+    - protocol: TCP
+      port: 443
+      targetPort: 443
+  type: LoadBalancer
